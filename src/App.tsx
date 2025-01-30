@@ -66,7 +66,7 @@ function App() {
                     <form onSubmit={handleSubmit(onSubmit)} className={"flex flex-col gap-2"}>
                         <input {...register("text")}
                            required={true}
-                               placeholder={"текст вопроса"}
+                               placeholder={"текст ответа"}
                            className={"rounded-2xl outline-0 border border-black text-black p-1"}
                         />
                         <select {...register("correct")} className={"bg-white text-black s"}>
