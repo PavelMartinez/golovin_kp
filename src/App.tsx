@@ -13,7 +13,9 @@ type AnswerType = {
     weight: number;
     correct: AnswerCorrect;
     checked?: boolean;
+    groupId?: string; // Новое поле для группировки
 }
+
 
 const Coefficients = {
     [AnswerCorrect.TRUE]: 1,
@@ -21,6 +23,29 @@ const Coefficients = {
     [AnswerCorrect.PARTIALLY_FALSE]: -0.5,
     [AnswerCorrect.FALSE]: -1
 }
+
+const hasIncompatibleAnswers = (questions: AnswerType[]) => {
+    const groupMap: Record<string, AnswerType[]> = {};
+
+    // Группируем ответы по groupId
+    questions.forEach((question) => {
+        if (question.checked && question.groupId) {
+            if (!groupMap[question.groupId]) {
+                groupMap[question.groupId] = [];
+            }
+            groupMap[question.groupId].push(question);
+        }
+    });
+
+    // Проверяем, есть ли в группе более одного выбранного ответа
+    for (const groupId in groupMap) {
+        if (groupMap[groupId].length > 1) {
+            return true; // Найдены несовместимые ответы
+        }
+    }
+
+    return false; // Несовместимых ответов нет
+};
 
 function App() {
     const [questions, setQuestions] = useState<AnswerType[]>([]);
@@ -31,23 +56,25 @@ function App() {
     } = useForm<AnswerType>();
     const checkedQuestions = questions.filter((item) => !!item.checked)
 
-    const weightSumPositive = checkedQuestions.filter((item) => item.correct === AnswerCorrect.TRUE || item.correct === AnswerCorrect.PARTIALLY_TRUE).reduce((acc: number, item) => {
-        acc += item.weight
+    const weightSumPositive = hasIncompatibleAnswers(checkedQuestions)
+        ? 0
+        : checkedQuestions.filter((item) => item.correct === AnswerCorrect.TRUE || item.correct === AnswerCorrect.PARTIALLY_TRUE).reduce((acc: number, item) => {
+            acc += item.weight;
+            return acc;
+        }, 0);
 
-        return acc;
-    }, 0);
-
-    const weightSumNegative = checkedQuestions.filter((item) => item.correct === AnswerCorrect.FALSE || item.correct === AnswerCorrect.PARTIALLY_FALSE).reduce((acc: number, item) => {
-        acc += item.weight
-
-        return acc;
-    }, 0);
+    const weightSumNegative = hasIncompatibleAnswers(checkedQuestions)
+        ? 0
+        : checkedQuestions.filter((item) => item.correct === AnswerCorrect.FALSE || item.correct === AnswerCorrect.PARTIALLY_FALSE).reduce((acc: number, item) => {
+            acc += item.weight;
+            return acc;
+        }, 0);
     const weightSumPositiveNormed = weightSumPositive > 1 ? 1 - (weightSumPositive - 1) / 2 : weightSumPositive;
     const weightSum = weightSumPositiveNormed + weightSumNegative;
 
 
     const onSubmit: SubmitHandler<AnswerType> = (data) => {
-        const newQuestions = [...questions, { text: data.text, weight: 0, correct: data.correct }];
+        const newQuestions = [...questions, { text: data.text, weight: 0, correct: data.correct, groupId: data.groupId }];
         setQuestions(newQuestions.map((question) => {
             const countThisType = newQuestions.filter((item) => item.correct === question.correct)
 
@@ -65,9 +92,9 @@ function App() {
                 <div className={"text-white"}>
                     <form onSubmit={handleSubmit(onSubmit)} className={"flex flex-col gap-2"}>
                         <input {...register("text")}
-                           required={true}
+                               required={true}
                                placeholder={"текст ответа"}
-                           className={"rounded-2xl outline-0 border border-black text-black p-1"}
+                               className={"rounded-2xl outline-0 border border-black text-black p-1"}
                         />
                         <select {...register("correct")} className={"bg-white text-black s"}>
                             {Object.values(AnswerCorrect).map((item, index) => (
@@ -76,6 +103,11 @@ function App() {
                                 </option>
                             ))}
                         </select>
+                        <input
+                            {...register("groupId")}
+                            placeholder="ID группы (опционально)"
+                            className={"rounded-2xl outline-0 border border-black text-black p-1"}
+                        />
                         {/*<Slider*/}
                         {/*    defaultValue={[0.5]}*/}
                         {/*    max={1}*/}
