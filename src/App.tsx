@@ -16,7 +16,6 @@ type AnswerType = {
     groupId?: string; // Новое поле для группировки
 }
 
-
 const Coefficients = {
     [AnswerCorrect.TRUE]: 1,
     [AnswerCorrect.PARTIALLY_TRUE]: 0.5,
@@ -47,6 +46,41 @@ const hasIncompatibleAnswers = (questions: AnswerType[]) => {
     return false; // Несовместимых ответов нет
 };
 
+const getWeightSums = (questions: AnswerType[]) => {
+    const checkedQuestions = questions.filter((item) => !!item.checked);
+    const incompatible = hasIncompatibleAnswers(checkedQuestions);
+
+    if (incompatible) {
+        return {
+            weightSumPositive: 0,
+            weightSumNegative: 0,
+            weightSumPositiveNormed: 0,
+            weightSum: 0
+        };
+    }
+
+    const weightSumPositive = checkedQuestions
+        .filter((item) => item.correct === AnswerCorrect.TRUE || item.correct === AnswerCorrect.PARTIALLY_TRUE)
+        .reduce((acc: number, item) => acc + item.weight, 0);
+
+    const weightSumNegative = checkedQuestions
+        .filter((item) => item.correct === AnswerCorrect.FALSE || item.correct === AnswerCorrect.PARTIALLY_FALSE)
+        .reduce((acc: number, item) => acc + item.weight, 0);
+
+    const weightSumPositiveNormed = weightSumPositive > 1
+        ? 1 - (weightSumPositive - 1) / 2
+        : weightSumPositive;
+
+    const weightSum = weightSumPositiveNormed + weightSumNegative;
+
+    return {
+        weightSumPositive,
+        weightSumNegative,
+        weightSumPositiveNormed,
+        weightSum
+    };
+};
+
 function App() {
     const [questions, setQuestions] = useState<AnswerType[]>([]);
     const {
@@ -54,26 +88,25 @@ function App() {
         handleSubmit,
         reset
     } = useForm<AnswerType>();
-    const checkedQuestions = questions.filter((item) => !!item.checked)
 
-    const weightSumPositive = hasIncompatibleAnswers(checkedQuestions)
-        ? 0
-        : checkedQuestions.filter((item) => item.correct === AnswerCorrect.TRUE || item.correct === AnswerCorrect.PARTIALLY_TRUE).reduce((acc: number, item) => {
-            acc += item.weight;
-            return acc;
-        }, 0);
-
-    const weightSumNegative = hasIncompatibleAnswers(checkedQuestions)
-        ? 0
-        : checkedQuestions.filter((item) => item.correct === AnswerCorrect.FALSE || item.correct === AnswerCorrect.PARTIALLY_FALSE).reduce((acc: number, item) => {
-            acc += item.weight;
-            return acc;
-        }, 0);
-    const weightSumPositiveNormed = weightSumPositive > 1 ? 1 - (weightSumPositive - 1) / 2 : weightSumPositive;
-    const weightSum = weightSumPositiveNormed + weightSumNegative;
-
+    const {
+        weightSumNegative,
+        weightSumPositiveNormed,
+        weightSum
+    } = getWeightSums(questions);
 
     const onSubmit: SubmitHandler<AnswerType> = (data) => {
+        // Проверка на дубликат AnswerCorrect внутри той же группы
+        if (data.groupId) {
+            const alreadyExists = questions.some(
+                (q) => q.groupId === data.groupId && q.correct === data.correct
+            );
+            if (alreadyExists) {
+                alert("В этой группе уже есть ответ с таким типом правильности");
+                return;
+            }
+        }
+
         const newQuestions = [...questions, { text: data.text, weight: 0, correct: data.correct, groupId: data.groupId }];
         setQuestions(newQuestions.map((question) => {
             const countThisType = newQuestions.filter((item) => item.correct === question.correct)
